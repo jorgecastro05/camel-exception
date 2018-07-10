@@ -22,6 +22,16 @@
             <log message="Only for testing the redeliveryPolicyRef"/>
         </onException>
 
+        <onException>
+            <exception>com.fuse.exceptions.MyFunctionalException</exception>
+            <redeliveryPolicy maximumRedeliveries="0"/>
+            <handled>
+                <simple>true</simple>
+            </handled>
+            <log message="%%% MyFunctional Exception handled."/>
+        </onException>
+
+
         <route id="routeInitLocalMain" xmlns:pay="http://www.fusesource.com/training/payment">
             <from uri="file:/data/exception-test/in"/>
             <convertBodyTo type="java.lang.String"/>
