@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:camel="http://camel.apache.org/schema/spring"
+       xmlns:ctx="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="
+       http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+       http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
+       http://camel.apache.org/schema/spring http://camel.apache.org/schema/spring/camel-spring.xsd">
+
+    <ctx:annotation-config/>
+    <ctx:component-scan base-package="com.fuse"/>
+
+    <camelContext id="camel" xmlns="http://camel.apache.org/schema/spring">
+
+        <errorHandler id="myErrorHandler" type="DeadLetterChannel" redeliveryPolicyRef="hello"
+                      deadLetterUri="direct:directDLQError"/>
+        <redeliveryPolicyProfile id="hello" maximumRedeliveries="2"/>
+
+        <onException redeliveryPolicyRef="hello">
+            <exception>java.lang.ClassCastException</exception>
+            <log message="Only for testing the redeliveryPolicyRef"/>
+        </onException>
+
+        <route id="routeInitLocalMain" xmlns:pay="http://www.fusesource.com/training/payment">
+            <from uri="file:/data/exception-test/in"/>
+            <convertBodyTo type="java.lang.String"/>
+            <log message="Message to be handled: ${file:onlyname}, body: ${body}"/>
+            <choice>
+                <when>
+                    <xpath>/pay:Payments/pay:Currency = 'EUR'</xpath>
+                    <log message="This is an Euro XML Payment: ${file:onlyname}"/>
+                    <setHeader headerName="Payment">
+                        <simple>EUR</simple>
+                    </setHeader>
+                    <to uri="direct:errorHandlerWithException"/>
+                </when>
+                <when>
+                    <xpath>/pay:Payments/pay:Currency = 'USD'</xpath>
+                    <log message="This is an USD XML Payment: ${file:onlyname}"/>
+                    <setHeader headerName="Payment">
+                        <simple>USD</simple>
+                    </setHeader>
+                    <to uri="direct:errorHandler"/>
+                </when>
+                <otherwise>
+                    <log message="This is an Other Currency XML Payment: ${file:onlyname}"/>
+                    <to uri="file:/data/excpetion-test/out/?fileExist=Append&amp;fileName=money-${date:now:yyyyMMdd}.xml"/>
+                </otherwise>
+            </choice>
+        </route>
+
+        <route id="direct-error-handler-with-exception">
+            <from uri="direct:errorHandlerWithException"/>
+            <log message="Message will be processed only 1 time."/>
+            <bean ref="myBean"/>
+        </route>
+
+        <route id="direct-error-handler" errorHandlerRef="myErrorHandler">
+            <from uri="direct:errorHandler"/>
+            <log message="Message will be processed 2 times."/>
+            <bean ref="myBean"/>
+        </route>
+
+        <route id="DLQ">
+            <from uri="direct:directDLQError"/>
+            <log message=">>> Info send to DLQ"/>
+        </route>
+
+    </camelContext>
+
+</beans>
